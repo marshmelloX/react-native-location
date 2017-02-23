@@ -136,6 +136,7 @@ RCT_EXPORT_METHOD(stopUpdatingHeading)
     NSLog(@"Location manager failed: %@", error);
 }
 
+// TODO: update heading depending on device orientation
 - (void)locationManager:(CLLocationManager *)manager didUpdateHeading:(CLHeading *)newHeading {
   if (newHeading.headingAccuracy < 0)
     return;
@@ -154,21 +155,26 @@ RCT_EXPORT_METHOD(stopUpdatingHeading)
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray *)locations {
     CLLocation *location = [locations lastObject];
-    NSDictionary *locationEvent = @{
-        @"coords": @{
-            @"latitude": @(location.coordinate.latitude),
-            @"longitude": @(location.coordinate.longitude),
-            @"altitude": @(location.altitude),
-            @"accuracy": @(location.horizontalAccuracy),
-            @"altitudeAccuracy": @(location.verticalAccuracy),
-            @"course": @(location.course),
-            @"speed": @(location.speed),
-        },
-        @"timestamp": @([location.timestamp timeIntervalSince1970] * 1000) // in ms
-    };
+    if(location != nil 
+	&& location.horizontalAccuracy > 0 
+	&& location.horizontalAccuracy < 2000) {
+    
+	NSDictionary *locationEvent = @{
+            @"coords": @{
+                @"latitude": @(location.coordinate.latitude),
+                @"longitude": @(location.coordinate.longitude),
+                @"altitude": @(location.altitude),
+                @"accuracy": @(location.horizontalAccuracy),
+                @"altitudeAccuracy": @(location.verticalAccuracy),
+                @"course": @(location.course),
+                @"speed": @(location.speed),
+            },
+            @"timestamp": @([location.timestamp timeIntervalSince1970] * 1000) // in ms
+        };
 
-    NSLog(@"%@: lat: %f, long: %f, altitude: %f", location.timestamp, location.coordinate.latitude, location.coordinate.longitude, location.altitude);
-    [self.bridge.eventDispatcher sendDeviceEventWithName:@"locationUpdated" body:locationEvent];
+        NSLog(@"%@: lat: %f, long: %f, altitude: %f", location.timestamp, location.coordinate.latitude, location.coordinate.longitude, location.altitude);
+        [self.bridge.eventDispatcher sendDeviceEventWithName:@"locationUpdated" body:locationEvent];
+    }
 }
 
 @end
