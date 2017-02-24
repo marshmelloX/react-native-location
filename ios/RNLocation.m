@@ -1,4 +1,5 @@
 #import <CoreLocation/CoreLocation.h>
+#import <UIKit/UIKit.h>
 
 #import <React/RCTBridge.h>
 #import <React/RCTConvert.h>
@@ -27,8 +28,9 @@ RCT_EXPORT_MODULE()
 
         self.locationManager.delegate = self;
 
+        self.locationManager.headingFilter = kCLHeadingFilterNone;
         self.locationManager.distanceFilter = kCLDistanceFilterNone;
-        self.locationManager.desiredAccuracy = kCLLocationAccuracyBest;
+        self.locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation;
 
         self.locationManager.pausesLocationUpdatesAutomatically = NO;
     }
@@ -63,6 +65,11 @@ RCT_EXPORT_METHOD(setDesiredAccuracy:(double) accuracy)
 RCT_EXPORT_METHOD(setDistanceFilter:(double) distance)
 {
     self.locationManager.distanceFilter = distance;
+}
+
+RCT_EXPORT_METHOD(setHeadingFilter:(double) degrees)
+{
+    self.locationManager.headingFilter = degrees;
 }
 
 RCT_EXPORT_METHOD(setAllowsBackgroundLocationUpdates:(BOOL) enabled)
@@ -136,30 +143,66 @@ RCT_EXPORT_METHOD(stopUpdatingHeading)
     NSLog(@"Location manager failed: %@", error);
 }
 
-// TODO: update heading depending on device orientation
-- (void)locationManager:(CLLocationManager *)manager didUpdateHeading:(CLHeading *)newHeading {
-  if (newHeading.headingAccuracy < 0)
-    return;
+-(float)fixHeading:(float)heading fromOrientation:(UIDeviceOrientation) orientation
+{
+    float newHeading = heading;
+    switch (orientation) {
+        case UIDeviceOrientationPortrait:
+            break;
+        case UIDeviceOrientationPortraitUpsideDown:
+            newHeading += 180.0f;
+            break;
+        case UIDeviceOrientationLandscapeLeft:
+            newHeading += 90.0f;
+            break;
+        case UIDeviceOrientationLandscapeRight:
+            newHeading -= 90.0f;
+            break;
+        default:
+            break;
+    }
+    while ( newHeading > 360.0f ) {
+        newHeading -= 360;
+    }
+    return newHeading;
+}
 
-  // Use the true heading if it is valid.
-  CLLocationDirection heading = ((newHeading.trueHeading > 0) ?
-    newHeading.trueHeading : newHeading.magneticHeading);
+- (NSString *)getOrientation
+{
+    // TODO: use accelerometer & gyroscope to detect device orientation
+    NSString *orientationString;
+    return orientationString;
+}
 
-  NSDictionary *headingEvent = @{
-    @"heading": @(heading)
-  };
+- (void)locationManager:(CLLocationManager *)manager didUpdateHeading:(CLHeading *)newHeading
+{
+    if (newHeading.headingAccuracy < 0) return;
 
-  NSLog(@"heading: %f", heading);
-  [self.bridge.eventDispatcher sendDeviceEventWithName:@"headingUpdated" body:headingEvent];
+    // Use the true heading if it is valid.
+    CLLocationDirection heading = ((newHeading.trueHeading > 0) ?
+        newHeading.trueHeading : newHeading.magneticHeading);
+
+    NSString *orientation = [self getOrientation];
+
+    float fixedHeading = [self fixHeading:heading
+                          fromOrientation:orientation];
+
+    NSDictionary *headingEvent = @{
+        @"heading": @(fixedHeading)
+    };
+
+    NSLog(@"heading: %f", fixedHeading);
+    [self.bridge.eventDispatcher sendDeviceEventWithName:@"headingUpdated" body:headingEvent];
 }
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray *)locations {
     CLLocation *location = [locations lastObject];
-    if(location != nil 
-	&& location.horizontalAccuracy > 0 
-	&& location.horizontalAccuracy < 2000) {
-    
-	NSDictionary *locationEvent = @{
+
+    if(location != nil
+        && location.horizontalAccuracy > 0
+        && location.horizontalAccuracy < 2000) {
+
+        NSDictionary *locationEvent = @{
             @"coords": @{
                 @"latitude": @(location.coordinate.latitude),
                 @"longitude": @(location.coordinate.longitude),
