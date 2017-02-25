@@ -161,31 +161,24 @@ RCT_EXPORT_METHOD(stopUpdatingHeading)
         default:
             break;
     }
-    while ( newHeading > 360.0f ) {
+    while (newHeading > 360.0f) {
         newHeading -= 360;
     }
     return newHeading;
-}
-
-- (NSString *)getOrientation
-{
-    // TODO: use accelerometer & gyroscope to detect device orientation
-    NSString *orientationString;
-    return orientationString;
 }
 
 - (void)locationManager:(CLLocationManager *)manager didUpdateHeading:(CLHeading *)newHeading
 {
     if (newHeading.headingAccuracy < 0) return;
 
+    UIDevice *device = [UIDevice currentDevice];
+
     // Use the true heading if it is valid.
     CLLocationDirection heading = ((newHeading.trueHeading > 0) ?
         newHeading.trueHeading : newHeading.magneticHeading);
 
-    NSString *orientation = [self getOrientation];
-
     float fixedHeading = [self fixHeading:heading
-                          fromOrientation:orientation];
+                          fromOrientation:device.orientation];
 
     NSDictionary *headingEvent = @{
         @"heading": @(fixedHeading)

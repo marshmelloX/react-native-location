@@ -9,6 +9,8 @@ import android.location.LocationManager;
 import android.location.LocationListener;
 import android.content.Context;
 import android.support.annotation.Nullable;
+import android.view.Surface;
+import android.view.WindowManager;
 import android.util.Log;
 import android.os.Bundle;
 
@@ -33,6 +35,7 @@ public class RNLocationModule extends ReactContextBaseJavaModule {
     private float mAzimuth;
     private float[] orientation;
     private float[] rMat;
+    private float[] rotMat;
     private String sensorDelay;
     private Sensor mSensor;
     private SensorEventListener mSensorListener;
@@ -52,13 +55,14 @@ public class RNLocationModule extends ReactContextBaseJavaModule {
         // Save Context for later use
         mReactContext = reactContext;
         // default values
-        distanceFilter = 5.0;
+        distanceFilter = 1.0;
         desiredAccuracy = 10.0;
         headingFilter = 1.0;
         // init heading sensors
         mAzimuth = 0;
         orientation = new float[3];
         rMat = new float[9];
+        rotMat = new float[9];
         sensorDelay = Sensor.SENSOR_DELAY_GAME;
         mSensorManager = (SensorManager) mReactContext.getSystemService(Context.SENSOR_SERVICE);
         mSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
@@ -125,7 +129,7 @@ public class RNLocationModule extends ReactContextBaseJavaModule {
     }
 
     /*
-     * Heading updates (TODO: use ACCELEROMETER and MAGNETIC_FIELD to detect device orientation)
+     * Heading updates
      */
     @ReactMethod
     public void startUpdatingHeading() {
@@ -141,9 +145,41 @@ public class RNLocationModule extends ReactContextBaseJavaModule {
               // calculate th rotation matrix
               SensorManager.getRotationMatrixFromVector(rMat, event.values);
 
+              int rotation = ((WindowManager) mReactContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getOrientation();
+              int axisX = SensorManager.AXIS_X;
+              int axisY = SensorManager.AXIS_Y;
+
+              switch (rotation) {
+                  case Surface.ROTATION_0:
+                      axisX = SensorManager.AXIS_X;
+                      axisY = SensorManager.AXIS_Y;
+                      break;
+
+                  case Surface.ROTATION_90:
+                      axisX = SensorManager.AXIS_Y;
+                      axisY = SensorManager.AXIS_MINUS_X;
+                      break;
+
+                  case Surface.ROTATION_180:
+                      axisX = SensorManager.AXIS_MINUS_X;
+                      axisY = SensorManager.AXIS_MINUS_Y;
+                      break;
+
+                  case Surface.ROTATION_270:
+                      axisX = SensorManager.AXIS_MINUS_Y;
+                      axisY = SensorManager.AXIS_X;
+                      break;
+
+                  default:
+                      break;
+              }
+
+              // map to new coords
+              SensorManager.remapCoordinateSystem(rMat, axisX, axisY, rotMat);
+
               // get the azimuth value (orientation[0]) in degree
-              float newAzimuth = (((((Math.toDegrees(SensorManager.getOrientation(rMat, orientation)[0]) + 360) % 360) -
-                  (Math.toDegrees(SensorManager.getOrientation(rMat, orientation)[2]))) + 360) % 360);
+              float newAzimuth = (((((Math.toDegrees(SensorManager.getOrientation(rotMat, orientation)[0]) + 360) % 360) -
+                  (Math.toDegrees(SensorManager.getOrientation(rotMat, orientation)[2]))) + 360) % 360);
 
               //dont react to changes smaller than the filter value
               if (Math.abs(mAzimuth - newAzimuth) < headingFilter) return;
@@ -172,7 +208,7 @@ public class RNLocationModule extends ReactContextBaseJavaModule {
     public void startUpdatingLocation() {
         mLocationListener = new LocationListener() {
             @Override
-            public void onStatusChanged(String str,int in,Bundle bd) {
+            public void onStatusChanged(String str, int in, Bundle bd) {
             }
 
             @Override
